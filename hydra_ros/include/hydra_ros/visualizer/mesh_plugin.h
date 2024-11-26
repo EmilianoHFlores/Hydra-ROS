@@ -35,6 +35,8 @@
 #pragma once
 #include <config_utilities/factory.h>
 #include <std_srvs/SetBool.h>
+#include "spark_dsg/mesh.h"
+#include "sensor_msgs/PointCloud2.h"
 
 #include "hydra_ros/visualizer/dsg_visualizer_plugin.h"
 
@@ -75,6 +77,11 @@ class MeshPlugin : public DsgVisualizerPlugin {
   bool color_by_label_ = false;
   bool need_redraw_ = true;
   ros::Publisher mesh_pub_;
+  //service that saves the mesh as a pcl
+  std::shared_ptr<Mesh> curr_mesh_;
+  ros::ServiceServer save_mesh_service_;
+  ros::Publisher pcl2_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("mesh_pcl", 1, true);
+  bool saveMesh(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res);
   ros::ServiceServer toggle_service_;
   std::unique_ptr<SemanticColorMap> colormap_;
   std::shared_ptr<const MeshColoring> mesh_coloring_;

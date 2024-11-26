@@ -41,6 +41,13 @@
 #include <hydra/utils/pgmo_mesh_traits.h>
 #include <kimera_pgmo_msgs/KimeraPgmoMesh.h>
 #include <kimera_pgmo_ros/conversion/ros_conversion.h>
+#include <pcl/PolygonMesh.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/conversions.h>
+#include <sensor_msgs/PointCloud2.h>
+
+#include <std_srvs/SetBool.h>
 
 #include "hydra_ros/visualizer/mesh_color_adaptor.h"
 
@@ -71,6 +78,9 @@ MeshPlugin::MeshPlugin(const Config& config,
 
   // namespacing gives us a reasonable topic
   mesh_pub_ = nh_.advertise<kimera_pgmo_msgs::KimeraPgmoMesh>("", 1, true);
+  // service to save mesh as pcl
+  save_mesh_service_ = nh_.advertiseService("save_mesh", &MeshPlugin::saveMesh, this);
+  pcl2_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("mesh_pcl", 1, true);
 }
 
 MeshPlugin::~MeshPlugin() {}
@@ -78,6 +88,7 @@ MeshPlugin::~MeshPlugin() {}
 void MeshPlugin::draw(const ConfigManager&,
                       const std_msgs::Header& header,
                       const DynamicSceneGraph& graph) {
+  curr_mesh_ = graph.mesh();
   auto mesh = graph.mesh();
   if (!mesh || mesh->empty()) {
     return;
@@ -97,6 +108,12 @@ void MeshPlugin::draw(const ConfigManager&,
   }
   msg.header = header;
   msg.ns = getMsgNamespace();
+  LOG(INFO) << "Publishing mesh with " << msg.vertices.size() << " vertices and "
+            << msg.triangles.size() << " faces from mesh_plugin.cpp";
+  
+  // Publish the mesh as a point cloud
+  sensor_msgs::PointCloud2 cloud_msg = kimera_pgmo::conversions::toRosPointCloud2(*mesh);
+  pcl2_pub_.publish(cloud_msg);
   mesh_pub_.publish(msg);
 }
 
@@ -104,6 +121,8 @@ void MeshPlugin::reset(const std_msgs::Header& header, const DynamicSceneGraph&)
   kimera_pgmo_msgs::KimeraPgmoMesh msg;
   msg.header = header;
   msg.ns = getMsgNamespace();
+  LOG(INFO) << "Publishing mesh with " << msg.vertices.size() << " vertices and "
+            << msg.triangles.size() << " faces from mesh_plugin.cpp::reset";
   mesh_pub_.publish(msg);
 }
 
@@ -123,5 +142,19 @@ bool MeshPlugin::handleService(std_srvs::SetBool::Request& req,
   need_redraw_ = true;
   return true;
 }
+
+bool MeshPlugin::saveMesh(std_srvs::SetBool::Request& req,
+                          std_srvs::SetBool::Response& res) {
+  if (req.data) {
+    kimera_pgmo_msgs::KimeraPgmoMesh msg;
+    msg.header.stamp = ros::Time::now();
+    msg.ns = getMsgNamespace();
+    mesh_pub_.publish(msg);
+    res.success = true;
+  } else {
+    res.success = false;
+  }
+  return true;
+                          }
 
 }  // namespace hydra
